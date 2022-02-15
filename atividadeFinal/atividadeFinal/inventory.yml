@@ -1,0 +1,9 @@
+local:
+   hosts:
+     127.0.0.1:
+        datacenter: primario
+remoto:      
+  hosts:
+    10.0.0.110:
+       datacenter: secundario
+       var_do_inventory: 'Inv-Var'

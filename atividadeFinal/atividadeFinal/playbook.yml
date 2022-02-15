@@ -1,0 +1,88 @@
+- hosts: remoto
+  gather_facts: True
+
+  vars:
+    ansible_python_interpreter: auto
+    context_path: /opt/slacko-api/
+    
+  tasks:
+  - name: Instalando net-tools
+    apt:
+      name: net-tools
+      update_cache: yes
+      state: present
+    tags:
+      - install
+      - network
+  
+  - name: Baixar repositorio GIT
+    ansible.builtin.git:
+      repo: "https://github.com/LeonardoDG2084/iaac_slacko-api.git"
+      dest: "{{ context_path }}"
+      clone: yes
+      version: master
+    tags:
+      - git
+      - files
+      - download
+
+  - name: Instalando docker
+    apt:
+      name: docker.io
+      update_cache: yes
+      state: present
+    tags:
+      - install
+      - docker
+
+  - name: Habilitar docker no boot
+    service:
+      name: docker
+      enabled: yes
+      state: started
+    tags:
+      - service
+      - docker
+
+  - name: Instalando Python PIP
+    apt:
+      name: python3-pip
+      update_cache: yes
+      state: present
+    tags:
+      - install
+      - python
+
+  - name: Install PIP docker
+    shell: "pip3 install docker"
+    tags:
+      - install
+      - python
+      - docker
+
+  - name: Run MongoDB
+    docker_container:
+      name: mongodb
+      image: mongo-express:0.54.0
+      state: started
+      detach: yes
+      env:
+        ME_CONFIG_MONGODB_SERVER: mongodb.iaac0506.com.br
+      exposed_ports:
+        - "8081"
+        - "27017"
+    tags:
+      - docker
+      - mongodb
+
+  - name: Install python reqs
+    shell: "python3 -m pip install -r {{ context_path }}/requeriments.txt"
+    tags:
+      - shell
+      - install
+
+  - name: Start App
+    shell: "/bin/bash {{ context_path }}/slacko-api.sh"
+    tags:
+      - shell
+      - start
