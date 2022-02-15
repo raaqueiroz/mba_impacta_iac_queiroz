@@ -1,0 +1,177 @@
+- hosts: remoto
+  gather_facts: True
+
+  # Ações que são executadas apenas quando a task encerra como changed e possui a linha de notify
+  handlers:
+    - name: Restart nginx handler
+      service:
+        name: nginx
+        state: restarted
+
+  vars:
+    pacotes:
+      - sysstat
+      - docker
+      - nginx
+    
+    dict: 
+      { 
+      pedro: 'docker', 
+      descricao0: 'execucao de containers',
+      pacote1: 'docker-compose',
+      descricao1: 'compose'
+      }
+
+  tasks:
+  - name: Instalando nginx
+    apt:
+      name: nginx
+      update_cache: yes
+      state: present
+    register: var_nginx
+    tags:
+      - installer
+
+  - name: Remove html files
+    file:
+      path: /var/www/html/index.nginx-debian.html
+      state: absent
+    tags:
+      - file-mgmt
+
+  - name: Configurando o log separado nginx
+    blockinfile:
+      path: /etc/nginx/sites-available/default
+      insertafter: "server_name _;"
+      block: |
+                access_log      /var/log/nginx/default.log;
+    tags:
+      - file-mgmt
+
+  - name: Create access log to page
+    file:
+       path: /var/log/nginx/default.log
+       state: touch
+       owner: www-data
+       group: adm
+       mode: 0755
+    tags:
+      - file-mgmt
+
+  - name: Nginx content
+    copy:
+       dest: /var/www/html/index.html
+       content: |
+          <h1> Esta pagina e do servidor: {{ ansible_nodename }} </h1>
+          <p> Esta variavel vem do inventario: {{ var_do_inventory }} </p>
+          <p> Data Atual {{ ansible_date_time.iso8601 }} </p>
+          <p> conteudo da instalacao do nginx: {{ var_nginx }} </p>
+          <p> Conteudo da variavel "Datacenter" do inventario: {{ datacenter }}
+    tags:
+      - site
+
+  # Task com when condicional para rodar apenas a quente, nunca em simulação
+  - name: Enable and start nginx service
+    when: not ansible_check_mode
+    systemd:
+       state: started
+       name: nginx
+       enabled: yes
+    tags:
+      - service
+      - svc
+
+  - name: Test using debug items
+    debug:
+      msg: "{{ item.name }} - {{ item.uid }}"
+    loop:
+      - name: Aluno01
+        uid: 1020
+      - name: Aluno02
+        uid: 1021
+    tags:
+      - loop
+      - debug
+
+  - name: Exibindo variaveis 1
+    debug: 
+      msg: "{{ item }}"
+    with_items: "{{ pacotes }}"
+    tags:
+      - vars1
+
+  - name: Exibindo variaveis 2
+    debug: 
+      msg: "{{ item }}"
+    with_items: "{{ pacotes[1] }}"
+    tags:
+      - vars2
+
+  - name: Exibindo variaveis 3
+    debug: 
+      msg: "Chave é: {{ item.key }} e o valor {{ item.value }}"
+    with_dict: "{{ dict }}"
+    tags:
+      - vars3
+
+  # Tasks Shell sempre rodam com status changed, e por isso irá acionar o handler
+  - name: LS local
+    shell: "ls"
+    register: saida_comando
+    tags:
+      - ls
+    notify: Restart nginx handler
+
+  # Task condicional com when, só é executada com o IF verdadeiro
+  - name: Task condicional
+    shell: "echo Rodou"
+    when: not saida_comando.rc != 0
+    tags:
+      - condicional
+
+  - name: Task com erro
+    shell: "ls /temp"
+    ignore_errors: yes
+    tags:
+      - ignore
+
+  # Tasks agrupadas por bloco, rescue é a exceção, como try,catch {} - Always
+  - name: Bloco de tasks
+    block:
+      - name: LS local Bloco
+        shell: "ls /"
+        register: saida_comando
+        notify: Restart nginx handler
+        tags:
+          - subbloco
+
+      - name: Task condicional Bloco
+        debug:
+          msg: "Rodou aqui"
+        when: not saida_comando.rc != 0
+    tags:
+      - bloco
+
+    rescue:
+      - name: Caiu no rescue
+        debug:
+          msg: "Entrou na exceção Rescue"
+      
+    always:
+      - name: Execução Always
+        debug:
+          msg: "Always"
+        when: saida_comando.rc == 0 # Possivel skippar um always porem nao e recomendado
+        debugger: always # on_skipped | on_failure
+
+
+  - name: Task de Debug
+    debug:
+      msg: "Saida"
+    tags:
+      - ignore
+      - condicional
+      - ls
+      - vars1
+      - vars2
+      - vars3
